@@ -1,12 +1,13 @@
 import { red } from "kolorist";
 import prompts from "prompts";
-import { Account, AccountAddress } from "@aptos-labs/ts-sdk";
+import { Network, AccountAddress } from "@aptos-labs/ts-sdk";
 import fs from "fs";
 
 export type Selections = {
   configPath: string;
   frameworkModules: Array<AccountAddress>;
   additionalModules: Array<AccountAddress>;
+  network: Network;
 };
 
 export function validateConfigPath(value: string) {
@@ -36,8 +37,16 @@ export function validateAddresses(value: string) {
   return "Please enter a valid comma separated list of addresses";
 }
 
+export function validateNetwork(value: string) {
+  const valid = Object.values(Network).includes(value as Network);
+  if (valid) {
+    return true;
+  }
+  return "Please enter a valid network";
+}
+
 export async function userInputs() {
-  let result: prompts.Answers<"configPath" | "frameworkModules" | "additionalModules">;
+  let result: prompts.Answers<"configPath" | "frameworkModules" | "additionalModules" | "network">;
 
   try {
     result = await prompts(
@@ -82,6 +91,13 @@ export async function userInputs() {
           hint: "- Comma separated list. Press enter to submit",
           validate: (value: string) => validateAddresses(value),
         },
+        {
+          type: "text",
+          name: "network",
+          message: "What network do you want to get the module ABIs from?",
+          initial: "devnet",
+          validate: (value: string) => validateNetwork(value),
+        },
       ],
       {
         onCancel: () => {
@@ -94,10 +110,11 @@ export async function userInputs() {
     process.exit(0);
   }
 
-  const { configPath, frameworkModules, additionalModules } = result;
+  const { configPath, frameworkModules, additionalModules, network } = result;
   return {
     configPath,
     frameworkModules,
     additionalModules,
+    network,
   } as Selections;
 }

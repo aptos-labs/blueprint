@@ -1,11 +1,18 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-import { TypeTag, TypeTagReference } from "@aptos-labs/ts-sdk";
+import { TypeTag, TypeTagReference, TypeTagSigner } from "@aptos-labs/ts-sdk";
 import { TypeTagEnum } from "../types.js";
 
 export function isReference(typeTag: TypeTag): typeTag is TypeTagReference {
   return typeTag instanceof TypeTagReference;
+}
+
+export function isSignerReference(typeTag: TypeTag): boolean {
+  if (!isReference(typeTag)) {
+    return false;
+  }
+  return typeTag.value.isSigner();
 }
 
 export function truncatedTypeTagString(args: {
@@ -125,42 +132,6 @@ export function toTypeTagEnum(typeTag: TypeTag): TypeTagEnum {
       throw new Error(`Unknown TypeTag: ${typeTag}`);
   }
 }
-
-export const inputTypeMapForView: { [key in TypeTagEnum]: string } = {
-  Bool: "boolean",
-  U8: "Uint8",
-  U16: "Uint16",
-  U32: "Uint32",
-  U64: "string",
-  U128: "string",
-  U256: "string",
-  AccountAddress: "string",
-  String: "string",
-  Vector: "Array",
-  Option: "Option", // OneOrNone<T>
-  Object: "ObjectAddress",
-  Signer: "Signer",
-  Generic: "InputTypes",
-  Struct: "Struct",
-};
-
-export const inputTypeMapForEntry: { [key in TypeTagEnum]: string } = {
-  Bool: "boolean",
-  U8: "Uint8",
-  U16: "Uint16",
-  U32: "Uint32",
-  U64: "Uint64",
-  U128: "Uint128",
-  U256: "Uint256",
-  AccountAddress: "AccountAddressInput",
-  String: "string",
-  Vector: "Array",
-  Option: "Option", // OneOrNone<T>
-  Object: "ObjectAddress",
-  Signer: "Signer",
-  Generic: "InputTypes",
-  Struct: "Struct",
-};
 
 export function toClassString(typeTagEnum: TypeTagEnum): string {
   switch (typeTagEnum) {

@@ -3,7 +3,8 @@
 
 import { AccountAddress, Hex, TypeTag, MoveModule, MoveModuleBytecode, Aptos } from "@aptos-labs/ts-sdk";
 import pako from "pako";
-import { toClassString, toTypeTagEnum } from "./parser/index.js";
+import { toClassString, toTypeTagEnum } from "./code-gen/index.js";
+import fs from "fs";
 
 export function toPascalCase(input: string): string {
   return input
@@ -69,7 +70,6 @@ export function numberToLetter(num: number): string {
 }
 
 export function copyCode(readPath: string, writePath: string, sdkPath = "@aptos-labs/ts-sdk") {
-  const fs = require("fs");
   if (fs.existsSync(readPath)) {
     const contents = fs.readFileSync(readPath, "utf8");
     // TODO: uhh fix this later, replacing both ../ and .. versions of the import

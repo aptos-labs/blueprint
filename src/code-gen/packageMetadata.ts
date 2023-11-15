@@ -11,8 +11,8 @@ import {
   transformCode,
 } from "../index.js";
 
+// sort the abiFunctions by moduleName alphabetically
 export const sortByNameField = (objs: any[]): any[] => {
-  // sort the abiFunctions by moduleName alphabetically
   objs.sort((a, b) => {
     if (a.name < b.name) {
       return -1;
@@ -79,7 +79,7 @@ export function extractSignature(functionName: string, sourceCode: string): Func
   // find the function signature in the source code
   const regex = new RegExp(`fun ${functionName}(<.*>)?\\s*\\(([^)]*)\\)`, "m");
   const match = sourceCode.match(regex);
-  let genericTypeTags = null;
+  let genericTypeTags: string | null = null;
   if (match) {
     genericTypeTags = match[1] ? match[1].slice(1, -1) : null;
   }
@@ -139,7 +139,7 @@ export function getMoveFunctionsWithArgumentNames(
 ): Array<MoveFunctionWithArgumentNamesAndGenericTypes> {
   return funcs.map((func) => {
     let argNames = new Array<string>();
-    let genericTypes = null;
+    let genericTypes: string | null = null;
     if (abi.name in mapping && func.name in mapping[abi.name]) {
       genericTypes = mapping[abi.name][func.name].genericTypes;
       argNames = mapping[abi.name][func.name].argumentNamesWithTypes.map((arg: ArgumentNamesWithTypes) => arg.argName);

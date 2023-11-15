@@ -43,7 +43,7 @@ export function getCodeGenConfig(configFilePath?: string): ConfigDictionary {
     separateViewAndEntryFunctionsByNamespace: true,
     sdkPath: "@aptos-labs/ts-sdk",
   };
-  if (configFilePath !== undefined && !fs.existsSync(configFilePath)) {
+  if (configFilePath !== undefined) {
     if (!fs.existsSync(configFilePath)) {
       throw new Error(`Config file not found at ${configFilePath}`);
     }

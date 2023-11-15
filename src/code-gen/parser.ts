@@ -19,31 +19,32 @@ import {
   codeGeneratorOptions,
   fetchModuleABIs,
   isAbiDefined,
-  numberToLetter,
   toFlattenedTypeTag,
   toPascalCase,
   truncateAddressForFileName,
   truncatedTypeTagString,
   copyCode,
-  toTypeTagEnum,
   TypeTagEnum,
   toClassString,
-  inputTypeMapForEntry,
-  inputTypeMapForView,
   toClassesString,
+  toInputTypeString,
+  transformEntryFunctionInputTypes,
+  transformViewFunctionInputTypes,
+  isSignerReference,
+  IMPORT_ACCOUNT_ADDRESS,
 } from "../index.js";
 import fs from "fs";
 import { ConfigDictionary } from "./config.js";
 import { format } from "prettier";
 import {
   DEFAULT_ARGUMENT_BASE,
-  R_PARENTHESIS,
   FOR_GENERATION_DIRECTORY,
   PAYLOAD_BUILDERS_FILE_NAME,
   ABI_TYPES_FILE_NAME,
   getBoilerplateImports,
   BOILERPLATE_COPYRIGHT,
 } from "../index.js";
+import { blue, red, yellow, green, white, lightGreen, ansi256Bg, ansi256 } from "kolorist";
 
 export class CodeGenerator {
   public readonly config: ConfigDictionary;
@@ -68,7 +69,6 @@ export class CodeGenerator {
       documentation,
     } = args;
     const viewFunction = args.viewFunction ?? false;
-    const GENERIC_TYPE_TAGS = new Array<TypeTag>();
     const fieldNames = suppliedFieldNames ?? [];
 
     // Check if the user supplied field names
@@ -107,7 +107,7 @@ export class CodeGenerator {
       lines.push(`export type ${argsType} = {`);
       functionArguments.forEach((functionArgument, i) => {
         if (viewFunction) {
-          const viewFunctionInputTypeConverter = this.toInputTypeString(functionArgument.typeTagArray, viewFunction);
+          const viewFunctionInputTypeConverter = toInputTypeString(functionArgument.typeTagArray, viewFunction);
           lines.push(`${fieldNames[i]}: ${viewFunctionInputTypeConverter};`);
         } else {
           lines.push(`${fieldNames[i]}: ${functionArgument.classString};`);
@@ -138,7 +138,7 @@ export class CodeGenerator {
     // ---------- Class fields ---------- //
     const entryOrView = viewFunction ? "View" : "Entry";
     lines.push(`export class ${className} extends ${entryOrView}FunctionPayloadBuilder {`);
-    lines.push(`public readonly moduleAddress = AccountAddress.fromRelaxed("${moduleAddress.toString()}");`);
+    lines.push(`public readonly moduleAddress = MODULE_ADDRESS;`);
     lines.push(`public readonly moduleName = "${moduleName}";`);
     lines.push(`public readonly functionName = "${functionName}";`);
     if (functionArguments.length > 0) {
@@ -163,7 +163,7 @@ export class CodeGenerator {
         }
       });
       functionArguments.forEach((functionArgument, i) => {
-        const inputType = this.toInputTypeString(functionArgument.typeTagArray, viewFunction);
+        const inputType = toInputTypeString(functionArgument.typeTagArray, viewFunction);
         const argComment = ` // ${functionArgument.annotation}`;
         lines.push(`${fieldNames[i]}: ${inputType}, ${argComment}`);
       });
@@ -183,14 +183,14 @@ export class CodeGenerator {
         // Although we can use them eventually when view functions accepts BCS inputs
         if (viewFunction) {
           // lines.push(`${fieldNames[i]}: ${functionArguments[i].kindArray},`);
-          const viewFunctionInputTypeConverter = this.transformViewFunctionInputTypes(
+          const viewFunctionInputTypeConverter = transformViewFunctionInputTypes(
             fieldNames[i],
             functionArguments[i].typeTagArray,
             0,
           );
           lines.push(`${fieldNames[i]}: ${viewFunctionInputTypeConverter},`);
         } else {
-          const entryFunctionInputTypeConverter = this.transformEntryFunctionInputTypes(
+          const entryFunctionInputTypeConverter = transformEntryFunctionInputTypes(
             fieldNames[i],
             functionArguments[i].typeTagArray,
             0,
@@ -213,125 +213,6 @@ export class CodeGenerator {
     return lines.join("\n");
   }
 
-  toInputTypeString(typeTags: Array<TypeTag>, forView: boolean): string {
-    const mapping = forView ? inputTypeMapForView : inputTypeMapForEntry;
-    const typeTag = typeTags[0];
-    const typeTagEnum = toTypeTagEnum(typeTag);
-    switch (typeTagEnum) {
-      case TypeTagEnum.Vector:
-        if (typeTags.length === 2 && typeTags[1].isU8()) {
-          return "HexInput";
-        }
-      case TypeTagEnum.Option:
-        return `${mapping[typeTagEnum]}<${this.toInputTypeString(typeTags.slice(1), forView)}>`;
-      case TypeTagEnum.Bool:
-      case TypeTagEnum.U8:
-      case TypeTagEnum.U16:
-      case TypeTagEnum.U32:
-      case TypeTagEnum.String:
-      case TypeTagEnum.Object:
-      case TypeTagEnum.U64:
-      case TypeTagEnum.U128:
-      case TypeTagEnum.U256:
-      case TypeTagEnum.AccountAddress:
-      case TypeTagEnum.Generic:
-        return mapping[typeTagEnum];
-      default:
-        throw new Error(`Unexpected TypeTagEnum: ${typeTagEnum}`);
-    }
-  }
-
-  /**
-   * The transformer function for converting the constructor input types to the view function JSON types.
-   *
-   */
-  transformViewFunctionInputTypes(fieldName: string, typeTags: Array<TypeTag>, depth: number): string {
-    // replace MoveObject with AccountAddress for the constructor input types
-    const typeTag = typeTags[0].isStruct() && typeTags[0].isObject() ? new TypeTagAddress() : typeTags[0];
-    const nameFromDepth = depth === 0 ? `${fieldName}` : `arg${numberToLetter(depth)}`;
-    const typeTagEnum = toTypeTagEnum(typeTag);
-    switch (typeTagEnum) {
-      case TypeTagEnum.Vector:
-        // if we're at the innermost type and it's a vector<u8>, we'll use the MoveVector.U8(hex: HexInput) factory method
-        if (typeTags.length === 2 && typeTags[1].isU8()) {
-          return `Hex.fromHexInput(${nameFromDepth})${R_PARENTHESIS.repeat(depth)}.toString()`;
-        }
-      case TypeTagEnum.Option: {
-        const innerNameFromDepth = `arg${numberToLetter(depth + 1)}`;
-        return (
-          `${nameFromDepth}.map(${innerNameFromDepth} => ` +
-          `${this.transformViewFunctionInputTypes(innerNameFromDepth, typeTags.slice(1), depth + 1)}`
-        );
-      }
-      case TypeTagEnum.AccountAddress:
-        return `${typeTag}.fromRelaxed(${nameFromDepth}).toString()${R_PARENTHESIS.repeat(depth)}`;
-      case TypeTagEnum.Bool:
-      case TypeTagEnum.U8:
-      case TypeTagEnum.U16:
-      case TypeTagEnum.U32:
-      case TypeTagEnum.String:
-        return `${nameFromDepth}${R_PARENTHESIS.repeat(depth)}`;
-      case TypeTagEnum.U64:
-      case TypeTagEnum.U128:
-      case TypeTagEnum.U256:
-        return `BigInt(${nameFromDepth}).toString()${R_PARENTHESIS.repeat(depth)}`;
-      case TypeTagEnum.Generic:
-        return inputTypeMapForView[typeTagEnum];
-      default:
-        throw new Error(`Unknown typeTag: ${typeTag}`);
-    }
-  }
-
-  /**
-   * The transformer function for converting the constructor input types to the class field types
-   * @param typeTags the array of BCSKinds, aka the class types as strings
-   * @returns a string representing the generated typescript code to convert the constructor input type to the class field type
-   * @see BCSKinds
-   */
-  transformEntryFunctionInputTypes(
-    fieldName: string,
-    typeTags: Array<TypeTag>,
-    depth: number,
-    replaceOptionWithVector = true,
-  ): string {
-    // replace MoveObject with AccountAddress for the constructor input types
-    const typeTag = typeTags[0].isStruct() && typeTags[0].isObject() ? new TypeTagAddress() : typeTags[0];
-    const nameFromDepth = depth === 0 ? `${fieldName}` : `arg${numberToLetter(depth)}`;
-    const typeTagEnum = toTypeTagEnum(typeTag);
-    switch (typeTagEnum) {
-      case TypeTagEnum.Vector:
-        // if we're at the innermost type and it's a vector<u8>, we'll use the MoveVector.U8(hex: HexInput) factory method
-        if (typeTags.length === 2 && typeTags[1].isU8()) {
-          return `MoveVector.U8(${nameFromDepth})${R_PARENTHESIS.repeat(depth)}`;
-        }
-      case TypeTagEnum.Option: {
-        // conditionally replace MoveOption with MoveVector for the constructor input types
-        const newTypeTag = replaceOptionWithVector ? new TypeTagVector((typeTag as any).value.typeArgs[0]) : typeTag;
-        const newTypeTagEnum = toTypeTagEnum(newTypeTag);
-        const innerNameFromDepth = `arg${numberToLetter(depth + 1)}`;
-        return (
-          `new ${toClassString(newTypeTagEnum)}(${nameFromDepth}.map(${innerNameFromDepth} => ` +
-          `${this.transformEntryFunctionInputTypes(innerNameFromDepth, typeTags.slice(1), depth + 1)})`
-        );
-      }
-      case TypeTagEnum.AccountAddress:
-        return `${toClassString(typeTagEnum)}.fromRelaxed(${nameFromDepth})${R_PARENTHESIS.repeat(depth)}`;
-      case TypeTagEnum.Bool:
-      case TypeTagEnum.U8:
-      case TypeTagEnum.U16:
-      case TypeTagEnum.U32:
-      case TypeTagEnum.U64:
-      case TypeTagEnum.U128:
-      case TypeTagEnum.U256:
-      case TypeTagEnum.String:
-        return `new ${toClassString(typeTagEnum)}(${nameFromDepth})${R_PARENTHESIS.repeat(depth)}`;
-      case TypeTagEnum.Generic:
-        return fieldName;
-      default:
-        throw new Error(`Unknown typeTag: ${typeTag}`);
-    }
-  }
-
   getClassArgTypes(
     typeTags: Array<TypeTag>,
     genericTypeParams: Array<MoveFunctionGenericTypeParam>,
@@ -345,17 +226,18 @@ export class CodeGenerator {
       let annotation = this.config.expandedStructs
         ? typeTag.toString()
         : truncatedTypeTagString({
-            typeTag,
-            namedAddresses: this.config.namedAddresses,
-            namedTypeTags: this.config.namedTypeTags,
-          });
+          typeTag,
+          namedAddresses: this.config.namedAddresses,
+          namedTypeTags: this.config.namedTypeTags,
+        });
 
       // TODO: Change this to Account? Or something else, not sure. But AccountAuthenticator doesn't make sense in the new flow anymore.
       // Check if it's an AccountAuthenticator, which indicates it's a signer argument
       // and we add it to the signerArguments array
-      if (flattenedTypeTag[0].isSigner()) {
+      const firstTypeTag = flattenedTypeTag[0];
+      if (firstTypeTag.isSigner() || isSignerReference(firstTypeTag)) {
         signerArguments.push({
-          typeTagArray: [flattenedTypeTag[0]],
+          typeTagArray: [firstTypeTag],
           classString: toClassString(TypeTagEnum.Signer),
           annotation,
         });
@@ -452,11 +334,6 @@ export class CodeGenerator {
     };
   }
 
-  // TODO: Add support for view functions. It should be very straightforward, since they're
-  // the same as entry functions but with no BCS serialization, so it just uses the input types.
-  // Also, no signers (verify this?)
-  //
-  // TODO: Add support for remote ABI BCS serialization? You just would treat everything like a view function.
   async fetchABIs(aptos: Aptos, accountAddress: AccountAddress): Promise<ABIGeneratedCodeMap> {
     const moduleABIs = await fetchModuleABIs(aptos, accountAddress);
     const sourceCodeMap = await getSourceCodeMap(accountAddress, aptos.config.network);
@@ -501,10 +378,7 @@ export class CodeGenerator {
           abiFunction.privateEntryFunctions,
           abiFunction.viewFunctions,
         ];
-        if (moduleName === "tournament_manager") {
-          console.log(abiFunction.publicEntryFunctions);
-          console.log(abiFunction.privateEntryFunctions);
-        }
+
         const codeForFunctionsWithAnyVisibility: Array<Array<string | undefined>> = [[], [], []];
         functionsWithAnyVisibility.forEach((functions, i) => {
           if (functions.length > 0) {
@@ -560,8 +434,6 @@ export class CodeGenerator {
         const privateFunctionsCodeString = `\n${codeForFunctionsWithAnyVisibility[1].join("\n")}\n`;
         const viewFunctionsCodeString = `\n${codeForFunctionsWithAnyVisibility[2].join("\n")}\n`;
 
-        // const namespaceString = `export namespace ${moduleName} {\n`;
-
         let entryFunctionsCode = `\n${publicFunctionsCodeString}${privateFunctionsCodeString}`;
         let viewFunctionsCode = `\n${viewFunctionsCodeString}`;
         if (this.config.separateViewAndEntryFunctionsByNamespace) {
@@ -570,16 +442,13 @@ export class CodeGenerator {
         }
 
         if (numPublicFunctions + numPrivateFunctions + numViewFunctions > 0) {
-          // let code = `${namespaceString}`;
           let code = "";
           code += numPublicFunctions + numPrivateFunctions > 0 ? entryFunctionsCode : "";
           code += numViewFunctions > 0 ? viewFunctionsCode : "";
-          // code += `}`;
           generatedCode[abi.name] = {
             address: abi.address,
             name: abi.name,
-            code: await format(code, { parser: "typescript" }),
-            // code: code,
+            code: code,
           };
         }
       }),
@@ -604,12 +473,11 @@ export class CodeGenerator {
         const fileNamedAddress = namedAddress.startsWith("0x")
           ? truncateAddressForFileName(address)
           : toPascalCase(namedAddress);
-        generatedIndexFile.push(`export * as ${fileNamedAddress} from "./${namedAddress}";`);
-        generatedIndexFile.push("\n");
+        generatedIndexFile.push(`export * as ${fileNamedAddress} from "./${namedAddress}.js";\n`);
         const filePath = `${baseDirectory}/index.ts`;
         // Read from `index.ts` and check if the namedAddress is already in the file
         // If it is, don't add it again
-        const newExport = `export * as ${fileNamedAddress} from "./${namedAddress}";\n`;
+        const newExport = `export * as ${fileNamedAddress} from "./${namedAddress}.js";\n`;
         if (fs.existsSync(filePath)) {
           const fileContents = fs.readFileSync(filePath, "utf8");
           if (fileContents.includes(newExport)) {
@@ -624,12 +492,12 @@ export class CodeGenerator {
       }),
     );
     copyCode(
-      `./src/abi/${FOR_GENERATION_DIRECTORY}/${PAYLOAD_BUILDERS_FILE_NAME}.ts`,
+      `./src/${FOR_GENERATION_DIRECTORY}/${PAYLOAD_BUILDERS_FILE_NAME}.ts`,
       baseDirectory + `${PAYLOAD_BUILDERS_FILE_NAME}.ts`,
       this.config.sdkPath,
     );
     copyCode(
-      `./src/abi/${FOR_GENERATION_DIRECTORY}/${ABI_TYPES_FILE_NAME}.ts`,
+      `./src/${FOR_GENERATION_DIRECTORY}/${ABI_TYPES_FILE_NAME}.ts`,
       baseDirectory + `${ABI_TYPES_FILE_NAME}.ts`,
       this.config.sdkPath,
     );
@@ -641,7 +509,7 @@ export class CodeGenerator {
     codeMap: ABIGeneratedCodeMap,
     skipEmptyModules = true,
   ) {
-    const perAddressIndexFile: Array<string> = [BOILERPLATE_COPYRIGHT];
+    const perAddressIndexFile: Array<string> = [BOILERPLATE_COPYRIGHT, IMPORT_ACCOUNT_ADDRESS];
 
     Object.keys(codeMap).forEach(async (moduleName, i) => {
       if (skipEmptyModules && (!codeMap[moduleName] || codeMap[moduleName].code.length === 0)) {
@@ -649,7 +517,7 @@ export class CodeGenerator {
         return;
       }
 
-      const { name, code } = codeMap[moduleName];
+      const { address, name, code } = codeMap[moduleName];
       const directory = baseDirectory + "/" + namedAddress;
       if (!fs.existsSync(directory)) {
         fs.mkdirSync(directory);
@@ -657,10 +525,11 @@ export class CodeGenerator {
       const fileName = `${name}.ts`;
       const filePath = `${directory}/${fileName}`;
       const contents = getBoilerplateImports(this.config.sdkPath) + "\n\n" + code;
+      const prettifiedCode = await format(contents, { parser: "typescript" });
 
-      perAddressIndexFile.push(`export * as ${toPascalCase(name)} from "./${name}";`);
+      perAddressIndexFile.push(`export * as ${toPascalCase(name)} from "./${name}.js";`);
       if (i === Object.keys(codeMap).length - 1) {
-        perAddressIndexFile.push("\n");
+        perAddressIndexFile.push(`\nexport const MODULE_ADDRESS = AccountAddress.fromRelaxed("${address}");\n`);
         // create the index.ts file
         const indexFilePath = `${directory}/index.ts`;
         if (fs.existsSync(indexFilePath)) {
@@ -672,7 +541,7 @@ export class CodeGenerator {
       if (fs.existsSync(filePath)) {
         fs.rmSync(filePath);
       }
-      fs.writeFileSync(filePath, contents);
+      fs.writeFileSync(filePath, prettifiedCode);
     });
   }
 

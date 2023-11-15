@@ -21,7 +21,8 @@
     "build": "npm run clean && tsc",
     "dev": "npm run build && node dist/index.js",
     "gen": "npm run build && node dist/index.js",
-    "_fmt": "prettier 'src/*.ts' 'src/**/*.ts' 'tests/*.ts' 'tests/**/*.ts' '.eslintrc.js'",
+    "dev-esm": "ts-node --esm index.ts",
+    "_fmt": "prettier 'generated/**/*.ts' 'src/*.ts' 'src/**/*.ts' 'tests/*.ts' 'tests/**/*.ts' '.eslintrc.js'",
     "fmt": "pnpm _fmt --write",
     "lint": "eslint 'src/**/*.ts' 'tests/*.ts' 'tests/**/*.ts'",
     "prepublish": "npm run build && npm publish"
