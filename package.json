@@ -1,0 +1,63 @@
+{
+  "name": "aptos-blueprint",
+  "description": "a code generation tool for seamless interaction with Aptos smart contracts",
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "author": "aptoslabs.com",
+  "keywords": [
+    "aptos",
+    "blueprint",
+    "abi gen",
+    "code generation",
+    "code generator",
+    "code-gen",
+    "codegen"
+  ],
+  "bin": {
+    "aptos-blueprint": "./dist/index.js"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc",
+    "dev": "npm run build && node dist/index.js",
+    "gen": "npm run build && node dist/index.js",
+    "_fmt": "prettier 'src/*.ts' 'src/**/*.ts' 'tests/*.ts' 'tests/**/*.ts' '.eslintrc.js'",
+    "fmt": "pnpm _fmt --write",
+    "lint": "eslint 'src/**/*.ts' 'tests/*.ts' 'tests/**/*.ts'",
+    "prepublish": "npm run build && npm publish"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "dependencies": {
+    "@aptos-labs/ts-sdk": "experimental",
+    "@types/js-yaml": "^4.0.9",
+    "@types/pako": "^2.0.3",
+    "@types/prompts": "^2.4.8",
+    "js-yaml": "^4.1.0",
+    "kolorist": "^1.8.0",
+    "pako": "^2.1.0",
+    "prompts": "^2.4.2",
+    "typescript": "^5.2.2"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.9.1",
+    "@typescript-eslint/parser": "^6.9.1",
+    "eslint": "^8.52.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-config-airbnb-typescript": "^17.1.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-import": "^2.29.0",
+    "prettier": "^3.1.0",
+    "@types/node": "^20.8.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aptos-labs/blueprint.git"
+  },
+  "homepage": "https://github.com/aptos-labs/blueprint/blob/main/README.md",
+  "bugs": {
+    "url": "https://github.com/aptos-labs/blueprint/issues"
+  }
+}

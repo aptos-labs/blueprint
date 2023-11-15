@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "module": "ESNext",
+        "moduleDetection": "force",
+        "moduleResolution": "node",
+        "noImplicitAny": true,
+        "preserveConstEnums": true,
+        "sourceMap": true,
+        "forceConsistentCasingInFileNames": true,
+        "outDir": "dist",
+        "declaration": true,
+        "allowSyntheticDefaultImports": true,
+        "strict": true,
+        "esModuleInterop": true,
+        "target": "ESNext"
+    },
+    "include": [
+        "./index.ts",
+        "src"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}
