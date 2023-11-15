@@ -58,8 +58,12 @@ export function transformEntryFunctionInputTypes(
       }
     case TypeTagEnum.Option: {
       // conditionally replace MoveOption with MoveVector for the constructor input types
-      const newTypeTag = replaceOptionWithVector ? new TypeTagVector((typeTag as any).value.typeArgs[0]) : typeTag;
-      const newTypeTagEnum = toTypeTagEnum(newTypeTag);
+      let newTypeTag = typeTag;
+      let newTypeTagEnum = toTypeTagEnum(typeTag);
+      if (typeTag.isStruct() && typeTag.isOption()) {
+        newTypeTag = replaceOptionWithVector ? new TypeTagVector(typeTag.value.typeArgs[0]) : typeTag;
+        newTypeTagEnum = toTypeTagEnum(newTypeTag);
+      }
       const innerNameFromDepth = `arg${numberToLetter(depth + 1)}`;
       return (
         `new ${toClassString(newTypeTagEnum)}(${nameFromDepth}.map(${innerNameFromDepth} => ` +
@@ -106,7 +110,7 @@ export function transformViewFunctionInputTypes(fieldName: string, typeTags: Arr
       );
     }
     case TypeTagEnum.AccountAddress:
-      return `${typeTag}.fromRelaxed(${nameFromDepth}).toString()${R_PARENTHESIS.repeat(depth)}`;
+      return `${toClassString(toTypeTagEnum(typeTag))}.fromRelaxed(${nameFromDepth}).toString()${R_PARENTHESIS.repeat(depth)}`;
     case TypeTagEnum.Bool:
     case TypeTagEnum.U8:
     case TypeTagEnum.U16:

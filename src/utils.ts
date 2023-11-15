@@ -46,7 +46,7 @@ export function toClassesString(typeTags: Array<TypeTag>): string {
     const typeTagEnum = toTypeTagEnum(typeTags[0]);
     return toClassString(typeTagEnum);
   }
-  let typeTagString = toTypeTagEnum(typeTags[typeTags.length - 1]).toString();
+  let typeTagString = toClassString(toTypeTagEnum(typeTags[typeTags.length - 1]));
   for (let i = typeTags.length - 2; i >= 0; i -= 1) {
     const typeTagEnum = toTypeTagEnum(typeTags[i]);
     typeTagString = `${toClassString(typeTagEnum)}<${typeTagString}>`;

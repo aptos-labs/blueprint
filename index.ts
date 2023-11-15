@@ -27,7 +27,8 @@ async function main() {
     const selections: Selections = {
         configPath: "./tests/config.yaml",
         additionalModules: [ AccountAddress.fromRelaxed("0x74007b85705153d40b88f994876fd2f7e12204f79527b44f71e69a9d34644f18") ],
-        frameworkModules: [], // ,[ AccountAddress.ONE, AccountAddress.THREE, AccountAddress.FOUR ], 
+        frameworkModules: [ AccountAddress.ONE, AccountAddress.THREE, AccountAddress.FOUR ], 
+        // frameworkModules: [],
         network: Network.LOCAL,
     }
     console.log(selections.configPath);
